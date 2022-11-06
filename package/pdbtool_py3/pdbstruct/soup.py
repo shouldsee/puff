@@ -112,7 +112,7 @@ class Soup:
     for chain in self._chains:
       for res in chain.residues():
         res_atoms = res.atoms()
-        res_atoms.sort(cmp_atom)
+        res_atoms.sort(key=lambda x:x.num)
         for atom in res_atoms:
           n_atom += 1
           atom.num = n_atom

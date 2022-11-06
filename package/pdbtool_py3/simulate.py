@@ -219,7 +219,7 @@ def langevin(
   parms['n_step_dynamics'] = n_step
   parms['n_step_per_snapshot'] = n_step_per_snapshot
   parms['temp_thermometer'] = "%.1f" % temp
-  parms['temp_initial'] = str(temp)
+  parms['temp_initial'] = float(temp)
   parms['gamma_ln'] = 5.0
   run_parms(parms)
 
@@ -288,7 +288,7 @@ def pulse(
 
   config = md_name + ".config"
 
-  n_pulse = parms['n_step_dynamics'] / n_step_per_pulse
+  n_pulse = parms['n_step_dynamics'] // n_step_per_pulse
   n_step_list = [n_step_per_pulse for i in range(n_pulse)]
   n_excess_step = parms['n_step_dynamics'] % n_step_per_pulse
   if n_excess_step > 0:

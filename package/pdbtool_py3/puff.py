@@ -654,9 +654,8 @@ def setup_run_or_wait_equilibrate(parms):
   msg = "equilibration"
   if simulate.continue_if_file(equil_finish_fname, msg):
     equil_start_fname = os.path.abspath('equil_started')
-    if os.path.isfile(equil_start_fname):
-      print("Waiting for other node: equilibrate", rel_dir)
-      perturb.wait_for_file_to_be_created(equil_finish_fname)
+    if os.path.isfile(equil_start_fname) and os.path.exists(equil_finish_fname):
+      pass
     else:
       print("Running: equilibrate", rel_dir)
       open(equil_start_fname, 'w').write('done')
@@ -686,10 +685,10 @@ def process_config(config):
   if not simulate.continue_if_file(done, msg):
     return
     
-  fail = os.path.abspath(config + '.fail')
-  if os.path.isfile(fail):
-    print("Skipping: previously failed", rel_config)
-    return
+  # fail = os.path.abspath(config + '.fail')
+  # if os.path.isfile(fail):
+  #   print("Skipping: previously failed", rel_config)
+  #   return
   
   save_dir = os.getcwd()
   parms = eval(open(config).read())
@@ -709,14 +708,14 @@ def process_config(config):
   print("Strategy:", parms['pulse_strategy'])
   push_strategy = eval(parms['pulse_strategy'])
 
-  try:
-    simulate.pulse(
-        in_md, 'md', parms['force_field'], parms['n_step'], 
-        lambda soup: push_strategy.apply(soup),
-        parms['n_step_per_pulse'])
-    open(done, 'w').write('done')
-  except:
-    open(fail, 'w').write('fail')
+#  try:
+  simulate.pulse(
+      in_md, 'md', parms['force_field'], parms['n_step'], 
+      lambda soup: push_strategy.apply(soup),
+      parms['n_step_per_pulse'])
+  open(done, 'w').write('done')
+#  except:
+#    open(fail, 'w').write('fail')
 
   os.chdir(save_dir)
 

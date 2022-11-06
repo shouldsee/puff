@@ -61,25 +61,34 @@ def clean_fname(fname):
     pass
 
 
-def run_with_output(cmd):
-  p = subprocess.Popen(
-      cmd, shell=True, stdout=subprocess.PIPE, 
-      stderr=subprocess.PIPE)
-  return p.stdout.read()
+# def run_with_output(cmd):
+# #  if isinstance(cmd,str): cmd=cmd.encode()
+#   p = subprocess.Popen(
+#       cmd, shell=True, stdout=subprocess.PIPE, 
+#       stderr=subprocess.PIPE)
+#   return p.stdout.read().decode()
+from pype import s as run_with_output
+#assert 0
 
 
 def run_with_output_file(cmd, out_fname=None):
+  txt = run_with_output(cmd)
+  return 
+  
   if not out_fname:
     txt = run_with_output(cmd)
     return
   sh_file = out_fname + '.sh'
   log_file = out_fname + '.log'
-  cmd_log = cmd + ' >& ' + log_file
+  cmd_log = cmd + ' &> ' + log_file
   open(sh_file, 'w').write(cmd_log)
   S_IRWXU = stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR
   os.chmod(sh_file, S_IRWXU)
   stopwatch = Timer()
-  os.system(cmd_log)
+  cmd_exec= 'set -e;'+cmd_log
+  print(f'[cmd_exec]{cmd_exec}')
+  subprocess.check_call(cmd_exec,shell=True)
+#  os.system(cmd_log)
   stopwatch.stop()
   open(out_fname + '.time', 'w').write(stopwatch.str())
  

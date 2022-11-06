@@ -14,14 +14,16 @@ import xdrlib
 
 import util
 import pdbstruct
-
-pdb2gmx = "pdb2gmx"
-trjconv = "trjconv"
-grompp = "grompp"
-editconf = "editconf"
-mdrun = "mdrun"
-genion = "genion"
-genbox = "genbox"
+from tqdm import tqdm
+GMX='/root/catsmile/prot/build/gromacs-tmpi/bin/gmx'
+pdb2gmx = f"{GMX} pdb2gmx"
+trjconv = f"{GMX} trjconv"
+grompp = f"{GMX} grompp"
+editconf = f"{GMX} editconf"
+mdrun = f"{GMX} mdrun"
+genion = f"{GMX} genion"
+#genbox = f"{GMX} genbox"
+genbox = f"{GMX} solvate"
 
 if 'talyn' in util.run_with_output('hostname'):
   mdrun = "mpiexec -np 12 /home/bosco/bin/gromacs-4.0.7/bin/mdrun"
@@ -183,7 +185,7 @@ def read_top(top):
       break
   skip = True
   qtot = None
-  for l in lines:
+  for l in tqdm(lines):
     if skip:
       if '[ atoms ]' in l:
         skip = False
@@ -199,10 +201,11 @@ def read_top(top):
     res_num = int(words[2])
     res_type = words[3]
     mass = float(words[7])
-    qtot = float(words[10])
+    qtot = 0.
+    if words.__len__()>=11:
+      qtot = float(words[10])
     masses.append(mass)
-  if qtot is not None:
-    total_qtot += qtot
+  total_qtot += qtot
   return masses, total_qtot
   
 
@@ -352,7 +355,7 @@ def delete_backup_files(tag):
 
 def check_file(f):
   if not os.path.isfile(f):
-    raise IOError("%f not found" % f)
+    raise IOError("%s not found" % f)
 
 ions_mdp = """
 ; ions.mdp - used as input into grompp to generate ions.tpr
@@ -366,7 +369,8 @@ nsteps      = 50000   ; Maximum number of (minimization) steps to perform
 nstlist     = 1       ; Frequency to update the neighbor list and long range forces
 ns_type     = grid    ; Method to determine neighbor list (simple, grid)
 rlist       = 1.0     ; Cut-off for making neighbor list (short range forces)
-coulombtype = PME     ; Treatment of long range electrostatic interactions
+;coulombtype = PME     ; Treatment of long range electrostatic interactions
+coulombtype     = cutoff    ; Treatment of long range electrostatic interactions
 rcoulomb    = 1.0     ; Short-range electrostatic cut-off
 rvdw        = 1.0     ; Short-range Van der Waals cut-off
 pbc         = xyz     ; Periodic Boundary Conditions (xyz/no)
@@ -374,7 +378,7 @@ pbc         = xyz     ; Periodic Boundary Conditions (xyz/no)
 def neutralize_with_salt(in_top, in_gro, out_name):
   masses, qtot = read_top(in_top)
   counter_ion_charge = -int(qtot)
-
+#  assert 0,counter_ion_charge
   if counter_ion_charge == 0:
     shutil.copy(in_gro, out_name + '.gro')
     return
@@ -395,15 +399,31 @@ def neutralize_with_salt(in_top, in_gro, out_name):
   gro = out_name + '.gro'
   log = out_name + '.genion.log'
   in_f = out_name + '.genion.in'
-  open(in_f, 'w').write('12') # pick solvent
-  charge_str = " -pname Na -nname Cl "
+  '''
+Group     1 (        Protein) has   247 elements
+Group     2 (      Protein-H) has   132 elements
+Group     3 (        C-alpha) has    16 elements
+Group     4 (       Backbone) has    48 elements
+Group     5 (      MainChain) has    65 elements
+Group     6 (   MainChain+Cb) has    80 elements
+Group     7 (    MainChain+H) has    83 elements
+Group     8 (      SideChain) has   164 elements
+Group     9 (    SideChain-H) has    67 elements
+Group    10 (    Prot-Masses) has   247 elements
+Group    11 (    non-Protein) has 11358 elements
+Group    12 (          Water) has 11358 elements
+Group    13 (            SOL) has 11358 elements
+Group    14 (      non-Water) has   247 elements
+  '''
+  open(in_f, 'w').write('13') # pick solvent
+  charge_str = " -pname NA -nname CL "
   if counter_ion_charge > 0:
     charge_str += " -np %d " % counter_ion_charge
   else:
     charge_str += " -nn %d " % abs(counter_ion_charge)
   util.run_with_output_file(
-       '%s -g %s -s %s -o %s -p %s %s  < %s' \
-           % (genion, log, tpr, gro, top, charge_str, in_f),
+       '%s -s %s -o %s -p %s %s  < %s' \
+           % (genion,  tpr, gro, top, charge_str, in_f),
        gro + '.salt')
   check_file(gro)
 
@@ -439,8 +459,30 @@ def prep_solvation(pdb, name, is_neutralize=True, is_constrain=False):
   raw_gro = name + '.raw.gro'
   top = name + '.top'
   itp = name + '_posre.itp'
-  cmd = '%s -ignh -ff amber99 -missing -f %s -o %s -p %s -i %s' \
+  '''
+  gromacs 2022
+  Select the Water Model:
+
+  1: TIP3P     TIP 3-point, recommended
+
+  2: TIP4P     TIP 4-point
+
+  3: TIP4P-Ew  TIP 4-point optimized with Ewald
+
+  4: TIP5P     TIP 5-point (see https://gitlab.com/gromacs/gromacs/-/issues/1348 for issues)
+
+  5: SPC       simple point charge
+
+  6: SPC/E     extended simple point charge
+
+  7: None
+
+  '''
+  cmd = 'echo "6 \\n" | %s -ignh -ff amber99 -missing -f %s -o %s -p %s -i %s' \
       % (pdb2gmx, pdb, raw_gro, top, itp)
+#  print(cmd)
+#  from pype import s
+#  s(cmd)
   util.run_with_output_file(cmd, '%s.pdb2gmx' % name)
   check_file(raw_gro)
 
@@ -458,7 +500,7 @@ def prep_solvation(pdb, name, is_neutralize=True, is_constrain=False):
           % (genbox, box_gro, solvated_gro, top),
        '%s.solvated' % name)
   check_file(solvated_gro)
-
+  
   if is_neutralize:
     neutralize_with_salt(top, solvated_gro, name)
   gro = name + '.gro'
@@ -539,7 +581,8 @@ nstvout         = $n_step_per_snapshot  ; save velocities every 0.05 ps
 nstenergy       = $n_step_per_snapshot  ; save energies every 0.05 ps
 nstlog          = $n_step_per_snapshot  ; update log file every 0.05 ps
 ; Bond parameters
-continuation    = yes           ; first dynamics run
+continuation    = no           ; first dynamics run
+
 constraints     = hbonds        ; bonds from heavy atom to H, constrained
 ; constraints     = all-bonds     ; all bonds (even heavy atom-H bonds) constrained
 ; constraint_algorithm = lincs    ; holonomic constraints 
@@ -610,8 +653,7 @@ def make_mdp(parms):
     else:        
       mdp += "; Velocity generation\n"
       mdp += "gen_vel         = no            ; Velocity generation is off \n"
-    mdp = "title           = Template for constant temperature/pressure\n" +\
-          mdp
+    mdp = "title           = Template for constant temperature/pressure\n" +mdp
   if 'restraint' in parms and parms['restraint']:
     mdp += "define            = -DPOSRES  ; position restrain the protein\n"
   return mdp
@@ -656,7 +698,7 @@ def run(parms):
   shutil.copy(parms['input_crds'], in_gro)
   tpr = name + '.tpr'
   util.run_with_output_file(
-       '%s -f %s -po %s -c %s -p %s -o %s' \
+       '%s -f %s -po %s -c %s -p %s -o %s -maxwarn 1' \
             % (grompp, in_mdp, mdp, in_gro, top, tpr),
         tpr)
 
