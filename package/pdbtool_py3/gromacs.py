@@ -14,7 +14,7 @@ import xdrlib
 
 import util
 import pdbstruct
-from tqdm import tqdm
+#from tqdm import tqdm
 GMX='/root/catsmile/prot/build/gromacs-tmpi/bin/gmx'
 pdb2gmx = f"{GMX} pdb2gmx"
 trjconv = f"{GMX} trjconv"
@@ -185,7 +185,7 @@ def read_top(top):
       break
   skip = True
   qtot = None
-  for l in tqdm(lines):
+  for l in (lines):
     if skip:
       if '[ atoms ]' in l:
         skip = False
